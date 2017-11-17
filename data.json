@@ -1,0 +1,64 @@
+[
+    {
+        "BTC": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "ETH": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "LTC": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "XRP": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "ZEC": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "IOT": {
+            "PRICE": 7000,
+            "VOL": 100,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        },
+        "TAGR": {
+            "PRICE": 10000,
+            "VOL": 430,
+            "SUPPLY": 500,
+            "CHANGE": 300
+        }
+    },
+    {
+        "Response": "Success",
+        "Type": 100,
+        "Aggregated": false,
+        "Data": [
+            { "time": 1509717060, "close": 7242.52 },
+            { "time": 1509717120, "close": 7240.30 },
+            { "time": 1509717180, "close": 7239.55 },
+            { "time": 1509717240, "close": 7238.86 },
+            { "time": 1509717300, "close": 7238.32 },
+            { "time": 1509717360, "close": 7238.70 },
+            { "time": 1509717420, "close": 7237.74 },
+            { "time": 1509717480, "close": 7233.79 },
+            { "time": 1509717540, "close": 7229.72 },
+            { "time": 1509717600, "close": 7227.82 },
+            { "time": 1509717660, "close": 7222.84 }
+        ]
+    }
+]

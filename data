@@ -1,0 +1,515 @@
+const Canvas = require('canvas');
+const d3 = require("d3");
+const fs = require("fs");
+const request = require("request");
+const asyncNode = require('async');
+const server = require('http').createServer(handler),
+    port = process.env.PORT || 6969,
+    ip = process.env.IP || "0.0.0.0";
+
+server.listen(port, ip, function(err, res) {
+    if (err) { console.log(err) }
+    console.log('Listening to port: ' + port + ' and IP: ' + ip);
+});
+var timeout = 4000;
+
+
+function handler(req, res) {
+    console.log('request start');
+    res.writeHead(200);
+
+
+    getHistoData("BTC", "USD", function(chartPoints) {
+        var canvas = drawCanvas(chartPoints);
+        //console.log(canvas.toDataURL());
+        res.end(canvas.toBuffer());
+    });
+}
+
+
+//Draw a chart
+var drawCanvas = function(chartPoints) {
+    var canvas = new Canvas(120, 35);
+    var ctx = canvas.getContext('2d');
+    console.log('Drawing Chart');
+    
+    
+    console.log(chartPoints);
+    
+
+    ctx.fillStyle = "rgb(250,250,250)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillStyle = "white";
+
+    var xScale = d3.scaleLinear().domain([0, 6]).range([0, canvas.width]);
+    var yScale = d3.scaleLinear().domain([0, 80]).range([canvas.height, 0]);
+
+    var lineGenerator = d3.line()
+        .x(function(d, i) {
+            return xScale(i);
+        })
+        .y(function(d) {
+            return yScale(d.value);
+        })
+        .curve(d3.curveCardinal)
+        .context(ctx);
+
+    var data = [
+        { value: 10 },
+        { value: 50 },
+        { value: 30 },
+        { value: 40 },
+        { value: 20 },
+        { value: 70 },
+        { value: 50 }
+    ];
+
+    ctx.beginPath();
+    lineGenerator(data);
+    ctx.lineWidth = "1";
+    ctx.strokeStyle = "green";
+    ctx.stroke();
+    
+    console.log('Finished drawing chart');
+
+    return canvas;
+};
+
+
+var getHistoData = function(fsym, tsym, callback) {
+    var chartPoints;
+    var url = "https://min-api.cryptocompare.com/data/histominute?fsym=" + fsym + "&tsym=" + tsym + "&limit=5&&e=CCCAGG";
+
+    request({
+        url: url,
+        timeout: timeout
+    }, function(error, response, body) {
+        if (!error && response.statusCode == 200) {
+            try {
+                var parsedResponse = JSON.parse(body);
+            }
+            catch (e) {
+                console.log('error getting cryptodata:' + e + 'for url: ' + url);
+            }
+            callback(parsedResponse.Data);
+        }
+    });
+};
+
+
+----------
+
+
+var Canvas = require('canvas');
+var d3 = require("d3");
+var request = require("request");
+var timeout = 5000;
+var asyncNode = require("async");
+var app = require('http').createServer(handler)
+  , port = process.env.PORT || 6969
+  , ip = process.env.IP || "0.0.0.0"
+  , urlModule = require('url')
+  ;
+var baseCcyData = [];
+var secondaryCcyData = [];
+var premiumData = [];
+var fxRates = {};
+
+app.listen(port,ip, function(err,res){
+	console.log('Listening to port: '+ port + ' and IP: ' + ip);
+});
+//if(params["apiKey"] == "06wizdV5zS0deMVQSIzXX"){
+
+var formatDate = function(timestamp) {
+  var date = new Date(timestamp);
+  var month = date.getMonth() + 1;
+  var monthStr = month < 10 ? "0" + month : month;
+  var day = date.getDate();
+  var dayStr = day < 10 ? "0" + day : day;
+  var dateString = date.getFullYear() + "-" + monthStr + "-" + dayStr;
+  return dateString;
+};
+
+var getCryptoData = function(fsym, tsym, callback) {
+  var url = "https://min-api.cryptocompare.com/data/histoday?aggregate=1&e=CCCAGG&extraParams=CryptoCompare&fsym="+ fsym +"&limit=30&tryConversion=false&tsym=" + tsym + "&apiKey=06wizdV5zS0deMVQSIzXX";
+  request({
+         url: url
+       , timeout: timeout-1000
+       , headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.65 Safari/537.36'
+        }
+    }, function (error, response, body) {
+      if (!error && response.statusCode == 200) {
+        try{
+            var parsedResponse = JSON.parse(body);
+        } catch(e) {
+          console.log('error getting cryptodata' + e + ' url '+ url);
+        }
+        callback(parsedResponse.Data);
+      }
+    });
+};
+
+var getFxData = function(ccy, callback) {
+  var currentTimestamp = new Date().getTime();
+  var currentDayTimestamp = currentTimestamp - currentTimestamp%86400000;
+  var dataPoints = 31;
+  var timestamps = [];
+  fxRates = {};
+  for (var i=0;i<dataPoints; ++i) {
+    var timestamp = currentDayTimestamp - i*86400000;
+    timestamps.push(timestamp);
+  }
+  asyncNode.eachSeries(timestamps, function(timestamp, timestampDone){
+    var date = formatDate(timestamp);
+    var url = "http://api.fixer.io/" + date + "?base=USD";
+    request({
+         url: url
+       , timeout: 5000
+       , headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.65 Safari/537.36'
+        }
+    }, function (error, response, body) {
+      if (!error && response.statusCode == 200) {
+        try{
+            var parsedResponse = JSON.parse(body);
+            fxRates[timestamp] = parsedResponse.rates[ccy];
+        }catch(err){
+           console.log('error requesting fx data'); 
+        }
+      }else{
+        console.log('error requesting fx data for ' + url + 'error: ' + error + 'statuscode: ' + response.statusCode); 
+      }
+      setTimeout(timestampDone, 100);
+    });
+  
+  }, function(err) {
+    if (err) {
+      console.log("error");
+    }
+    callback();
+  });
+  
+};
+
+var processData = function(){
+  var length = secondaryCcyData.length;
+  for (var i=0; i<length; ++i) {
+    var currentItem = secondaryCcyData[i];
+    if (fxRates.hasOwnProperty(currentItem.time*1000)) {
+      var baseItem = baseCcyData[i];
+      var priceConverted = currentItem["close"]/fxRates[currentItem.time*1000];
+      var prem = priceConverted - baseItem.close;
+      var premPercent = prem/baseItem.close*100;      
+      var currentPremiumItem = {time: currentItem.time, close: priceConverted, prem: prem, premPercent: premPercent};
+      premiumData.push(currentPremiumItem);
+    }
+  }
+};
+
+var drawChart = function(fsym, tsym, isPremium) {
+  var canvas = new Canvas(1000, 600); // SIZE OF THE CHART
+  var context = canvas.getContext('2d');
+	var margin = {top: 50, right: 70, bottom: 65, left: 70},
+    width = canvas.width - margin.left - margin.right,
+    height = canvas.height - margin.top - margin.bottom;
+  
+  context.fillStyle = "#000"; // BACKGROUND COLOT
+	context.fillRect(0,0,canvas.width,canvas.height);
+	
+	var title = fsym +" Price Comparision " + tsym + " vs USD";
+	var whiteData = fsym + "USD";
+	var orangeData = fsym + tsym;
+	if (isPremium) {
+	  title = fsym + " Premium in " + tsym  + " vs USD";
+	  whiteData = "Premium";
+	}
+	
+	//title
+	 context.textAlign = "left";
+	 context.fillStyle = "white";
+	 context.textBaseline = "top";
+	 context.font = "bold 16px sans-serif";
+	 context.fillText( title, 70, 20);
+	
+	//source
+	 context.textAlign = "right";
+	 context.fillStyle = "white";
+	 context.textBaseline = "top";
+	 context.font = "bold 10px sans-serif";
+	 context.fillText("Source: CryptoCompare.com", canvas.width-10, canvas.height - 20);
+	
+	//legend
+	context.beginPath();
+	context.moveTo(50, canvas.height-15);
+	context.lineTo(80, canvas.height-15);
+	context.strokeStyle = "white";
+	context.stroke();
+	context.textAlign = "left";
+	context.fillStyle = "white";
+	context.textBaseline = "top";
+	context.font = "bold 10px sans-serif";
+	context.fillText(whiteData, 90, canvas.height-20);
+	
+	context.beginPath();
+	context.moveTo(200, canvas.height-15);
+	context.lineTo(230, canvas.height-15);
+	context.strokeStyle = "#ffaa0c";
+	context.stroke();
+	context.textAlign = "left";
+	context.fillStyle = "white";
+	context.textBaseline = "top";
+	context.font = "bold 10px sans-serif";
+	context.fillText(orangeData, 240, canvas.height-20);
+	
+	var parseTime = d3.timeParse("%y-%m-%d");
+	
+	var x = d3.scaleTime()
+	    .range([0, width]);
+	
+	var y = d3.scaleLinear()
+	    .range([height, 0]);
+	    
+	var ySecondary = d3.scaleLinear()
+	    .range([height, 0]);
+	
+	var line = d3.line()
+    .x(function(d) { return x(d.time); })
+    .y(function(d) { return y(d.close); })
+    .context(context);
+  
+  var area = d3.area()
+    .x(function(d) { return x(d.time); })
+    .y0(function(d) { return ySecondary(0); })
+    .y1(function(d) { return ySecondary(d.close); })
+    .context(context);
+    
+	context.translate(margin.left, margin.top);
+	
+	var data1 = premiumData.map(function(obj) { 
+	   var rObj = {};
+	   rObj['time'] = new Date(obj.time * 1000);
+	   rObj['close'] = obj['close'];
+	   return rObj;
+	});
+	
+	var data2;
+	
+	if (isPremium) {
+	     data2 = premiumData.map(function(obj) { 
+    	   var rObj = {};
+    	   rObj['time'] = new Date(obj.time * 1000);;
+    	   rObj['close'] = obj['premPercent'];
+    	   return rObj;
+    	});
+    	y.domain([d3.min(data1, function(d) {
+    		return Math.min(d.close)*0.9; }), 
+      d3.max(data1, function(d) {
+    		return Math.max(d.close)*1.1; })]);
+    	ySecondary.domain([d3.min(data2, function(d) {
+    		return Math.min(d.close)-10; }), 
+      d3.max(data2, function(d) {
+    		return Math.max(d.close)+10; })]);
+    	x.domain(d3.extent(data1, function(d) { return d.time; }));
+	    xAxis();
+	    yAxis();
+    	yAxisSecondary();
+    	
+    	var my_gradient=context.createLinearGradient(50,0,0,canvas.height);
+      my_gradient.addColorStop(0,"white");
+      my_gradient.addColorStop(1,"transparent");
+    
+      context.beginPath();
+      area(data2);
+      context.closePath();
+      context.fillStyle = my_gradient;
+      context.fill();
+      context.strokeStyle = 'white';
+      context.stroke();
+      
+	} else {
+	     data2 = baseCcyData.map(function(obj) { 
+    	   var rObj = {};
+    	   rObj['time'] = new Date(obj.time * 1000);;
+    	   rObj['close'] = obj['close'];
+    	   return rObj;
+    	});
+    	y.domain([
+        d3.min([{id: 'prem', values: data1}, {id: 'base', values: data2}], function(c) { return d3.min(c.values, function(d) { return d.close; })*0.9; }),
+        d3.max([{id: 'prem', values: data1}, {id: 'base', values: data2}], function(c) { return d3.max(c.values, function(d) { return d.close; })*1.1; })
+      ]);
+      x.domain(d3.extent(data1, function(d) { return d.time; }));
+	    xAxis();
+	    yAxis();
+      context.beginPath();
+      line(data2);
+      context.lineWidth = 1.5;
+      context.strokeStyle = "white";
+      context.stroke();
+	}
+
+  context.beginPath();
+	line(data1);
+	context.lineWidth = 2;
+	context.strokeStyle = "#ffaa0c";
+	context.stroke();
+	
+	function xAxis() {
+	  var tickCount = 10,
+	      tickSize = 6,
+	      ticks = x.ticks(tickCount),
+	      tickFormat = d3.timeFormat("%b %d");
+	
+	  context.beginPath();
+	  ticks.forEach(function(d) {
+	    context.moveTo(x(d), height);
+	    context.lineTo(x(d), height + tickSize);
+	  });
+	  context.strokeStyle = "white";
+	  context.stroke();
+	  
+	  context.beginPath();
+	  context.moveTo(0, height -0.5);
+	  context.lineTo(width, height-0.5);
+	  context.strokeStyle = "white";
+	  context.stroke();
+	  
+	  context.beginPath();
+	  context.moveTo(0, 0);
+	  context.lineTo(width, 0);
+	  context.strokeStyle = "white";
+	  context.stroke();
+	  
+	  context.textAlign = "center";
+	  context.textBaseline = "top";
+	  context.fillStyle = "white";
+	  ticks.forEach(function(d) {
+	    context.fillText(tickFormat(d), x(d), height + tickSize);
+	  });
+	}
+	
+	function yAxis() {
+	  var tickCount = 10,
+	      tickSize = 6,
+	      tickPadding = 3,
+	      ticks = y.ticks(tickCount),
+	      tickFormat = y.tickFormat(tickCount);
+	
+	  context.beginPath();
+	  ticks.forEach(function(d) {
+	    context.moveTo(0, y(d));
+	    context.lineTo(-6, y(d));
+	  });
+	  context.strokeStyle = "white";
+	  context.stroke();
+	
+	  context.beginPath();
+	  context.moveTo(0.5, 0);
+	  context.lineTo(0.5, height);
+	  context.strokeStyle = "white";
+	  context.stroke();
+	
+	  context.textAlign = "right";
+	  context.textBaseline = "middle";
+	  ticks.forEach(function(d) {
+	    context.fillText(tickFormat(d), -tickSize - tickPadding, y(d));
+	  });
+	  
+	  context.beginPath();
+	  context.moveTo(width, 0.5);
+	  context.lineTo(width, height);
+	  context.strokeStyle = "white";
+	  context.stroke();
+	
+	  context.save();
+	  context.rotate(-Math.PI / 2);
+	  context.textAlign = "right";
+	  context.fillStyle = "white";
+	  context.textBaseline = "top";
+	  context.font = "bold 10px sans-serif";
+	  context.fillText("Price (USD)", -10, 10);
+	  context.restore();
+	}
+	
+	function yAxisSecondary() {
+	  var tickCount = 10,
+	      tickSize = 6,
+	      tickPadding = 3,
+	      ticks = ySecondary.ticks(tickCount),
+	      tickFormat = ySecondary.tickFormat(tickCount);
+	
+	  context.beginPath();
+	  ticks.forEach(function(d) {
+	    context.moveTo(width, ySecondary(d));
+	    context.lineTo(width+tickSize, ySecondary(d));
+	  });
+	  context.strokeStyle = "white";
+	  context.stroke();
+	
+	  context.beginPath();
+	  context.moveTo(width, 0.5);
+	  context.lineTo(width, height);
+	  context.strokeStyle = "white";
+	  context.stroke();
+	
+	  context.textAlign = "left";
+	  context.textBaseline = "middle";
+	  ticks.forEach(function(d) {
+	    context.fillText(tickFormat(d), width + tickSize + 2, ySecondary(d));
+	  });
+	
+	  context.save();
+	  context.rotate(-Math.PI / 2);
+	  context.textAlign = "right";
+	  context.fillStyle = "white";
+	  context.textBaseline = "top";
+	  context.font = "bold 10px sans-serif";
+	  context.fillText("Percent (%)",- 10, width -20);
+	  context.restore();
+	}
+	
+	return canvas;
+};
+
+function handler (req, res) {
+  console.log('request start');
+  var urlObj = urlModule.parse(req.url, true);
+	var urlParams = urlObj.query;
+  console.log(JSON.stringify(urlParams));
+  var fsym = urlParams.fsym;
+  var tsym = urlParams.tsym;
+  var isPremium = false;
+  if (Object.hasOwnProperty.call(urlParams,'premium')) {
+    isPremium = true;
+  }
+  
+  baseCcyData = [];
+  secondaryCcyData = [];
+  premiumData = [];
+  getFxData(tsym, function() {
+    var currencies = [tsym, 'USD'];
+    asyncNode.eachSeries(currencies, function(ccy, ccyDone){
+      getCryptoData(fsym, ccy, function(data){
+        if (ccy === "USD") {
+          baseCcyData = data;
+        } else {
+          secondaryCcyData = data;
+        }
+        ccyDone();
+      });
+    }, function(err) {
+      if (err) {
+        console.log("err");
+      }
+      processData();
+      var canvas = drawChart(fsym, tsym, isPremium);
+  	  res.writeHead(200,{
+  	  'Content-Type': 'image/png' });
+  	  res.end(canvas.toBuffer());
+    });
+  });
+  
+};
